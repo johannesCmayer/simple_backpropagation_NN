@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import typing as tp
 import random
 from matplotlib.animation import FuncAnimation
+import collections as col
 
 
 class InputException(Exception):
@@ -32,6 +33,10 @@ def relu(x):
 
 def l_relu(x, seal_strength=10):
     return x * ((x <= 0).astype(np.float32) / seal_strength + (x > 0).astype(np.float32))
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 
 def mean_square_error(predictions, labels):
@@ -65,7 +70,7 @@ class Network:
     def biasses(self, v):
         self._biasses = v
 
-    def eval(self, input: np.array, or_weights=None, or_biasses=None, nonlin=relu):
+    def eval(self, input: np.array, or_weights=None, or_biasses=None, nonlin=sigmoid):
         self._validate_input(input, 1)
         if or_weights is None:
             or_weights = self.weights
@@ -155,20 +160,25 @@ class Network:
         return self.average_weights(total_weight_gradient), self.average_biasses(total_bias_gradient)
 
     def optimize(self, inputs, labels, iterations, learning_rate=5e-4, play_learn_animation=True):
+        Points = col.namedtuple('Points', 'x, y')
         self._validate_input(inputs, 2)
         print_frequency = iterations / 10
+        anim_data_pred = AnimationCurveData()
+        anim_data_y = AnimationCurveData()
         for i in range(iterations):
             weight_grad, bias_grad = self.total_gradient(inputs, labels)
             self.weights = [layer_w + w_update * learning_rate for layer_w, w_update in
                             zip(self.weights, weight_grad)]
             self.biasses = [layer_b + b_update * learning_rate for layer_b, b_update in
                             zip(self.biasses, bias_grad)]
+            anim_data_pred.add_frame_data(inputs, self.batch_eval(inputs))
+            anim_data_y.add_frame_data(inputs, labels)
             if (i % print_frequency == 0 or i == 0):
                 print('iter:', i)
                 print('error:', mean_square_error(self.batch_eval(inputs), labels))
         self._validate()
         if play_learn_animation:
-            learn_animation((inputs, self.batch_eval(inputs)), (inputs, labels))
+            learn_animation([anim_data_pred, anim_data_y])
 
     def _validate(self):
         pass
@@ -188,7 +198,7 @@ def run():
     inputs = np.linspace(5, 10, 20).reshape(-1, 1)
 
     n = Network((len(inputs[0]), 5, 5, len(labels[0])))
-    n.optimize(inputs, labels, 100, play_learn_animation=True)
+    n.optimize(inputs, labels, 30, play_learn_animation=True, learning_rate=1e-4)
 
     results = []
     for i in inputs:
@@ -200,21 +210,48 @@ def run():
     #plt.xlim(5,10)
     plt.show()
 
-def learn_animation(*args):
+class AnimationCurveData:
+    def __init__(self):
+        self.all_x_points = []
+        self.all_y_points = []
+        self.current_frame = 0
+
+    @property
+    def animation_length(self):
+        return len(self.all_x_points)
+
+    def add_frame_data(self, frame_x_points, frame_y_point):
+        self.all_x_points.append(frame_x_points)
+        self.all_y_points.append(frame_y_point)
+
+    def get_next_frame_data(self):
+        points = self.all_x_points[self.current_frame], self.all_y_points[self.current_frame]
+        self.current_frame += 1
+        if self.current_frame > len(self.all_x_points):
+            self.current_frame = 0
+        return points
+
+
+def learn_animation(curve_data):
     fig, ax = plt.subplots()
     lines = []
-    for cord in args:
-        lines.append(plt.plot([], [], 'ro', animated=True))
-    lines = [l[0] for l in lines]
+    for cord, style in zip(curve_data, ('r-', 'b-')):
+        ln, =(plt.plot([], [], style, animated=True))
+        lines.append(ln)
 
     def update(frame):
         frame = int(frame)
-        xdata, ydata = args[frame]
-        xdata, ydata = np.reshape(xdata, -1), np.reshape(ydata, -1)
-        lines[frame].set_data(xdata, ydata)
+        for line, curve_d in zip(lines, curve_data):
+            xdata, ydata = curve_d.get_next_frame_data()
+            xdata, ydata = np.reshape(xdata, -1), np.reshape(ydata, -1)
+            line.set_data(xdata, ydata)
         return lines
 
-    ani = FuncAnimation(fig, update, frames=np.linspace(0, len(args)-1, len(args)-1), blit=True, repeat=True)
+
+    number_of_frames = curve_data[0].animation_length - 1
+    update(number_of_frames)
+    print('num of frames', number_of_frames)
+    ani = FuncAnimation(fig, update, frames=np.linspace(0, 10, 2), blit=True, repeat=False)
     plt.ylim(0,40)
     plt.xlim(0,40)
     plt.show()
