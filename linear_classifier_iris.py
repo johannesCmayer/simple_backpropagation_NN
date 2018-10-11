@@ -27,7 +27,7 @@ def encode_int_onehot(int_to_encode, num_classes):
 
 def get_data(id):
     data_get_func = {'iris': lambda: load_iris(return_X_y=True),
-                     'blob': lambda: make_blobs(100, 2)}
+                     'blob': lambda: make_blobs(100, 2, centers=5)}
     x_data, y_data = data_get_func.get(id)()
     x_data, y_data = shuffle(x_data, y_data)
 
@@ -43,15 +43,24 @@ def run():
     y_int = np.argmax(y_one_hot, axis=-1)
 
     lc = lin_clf.LinearClassifier(x_data_normalized[0].size, y_one_hot[0].size)
-    lc.train(x_data_normalized, y_one_hot, verbose=True, batch_size=None, epochs=600, learning_rate=0.01, loss=lin_clf.mse_loss)
+    lc.train(x_data_normalized, y_one_hot, verbose=True, batch_size=None, epochs=1000, learning_rate=0.01, loss=lin_clf.mse_loss)
 
-    # grid = np.meshgrid(np.linspace(0, 1, 10), np.linspace(0, 1, 10))
-    # grid = np.reshape(grid, (2, -1))
-    # pred = lc.batch_eval(grid)
+
+
     plt.scatter([e[0] for e in x_data_normalized], [e[1] for e in x_data_normalized], c=y_int)
 
     for i in range(len(lc.weights)):
-        plt.plot([-1,1], [-np.sum(lc.weights[i]), np.sum(lc.weights[i])])
+        plt.plot([-1,1], [-np.sum(lc.weights[i])*0.5, np.sum(lc.weights[i])])
+
+    grid_size = 1
+    grid = np.meshgrid(np.linspace(-grid_size, grid_size, 100), np.linspace(-grid_size, grid_size, 100))
+    grid = np.reshape(grid, (2, -1))
+    grid_inputs = [[a, b] for a, b in zip(grid[0], grid[1])]
+    pred = lc.batch_eval(grid_inputs)
+    pred_col = np.argmax(pred, axis=-1)
+    plt.scatter(grid[0], grid[1], c=pred_col, alpha=0.1)
+
+    plt.grid()
     plt.show()
 
 

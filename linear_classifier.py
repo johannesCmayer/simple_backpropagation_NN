@@ -33,6 +33,9 @@ class LinearClassifier():
             active_weights = overwrite_weights
         return np.matmul(active_weights, inputs)
 
+    def batch_eval(self, inputs, overwrite_weights=None):
+        return [self.eval(i, overwrite_weights=overwrite_weights) for i in inputs]
+
     def outputs_to_probabilities(self, outputs):
         squashed_result = outputs / np.amax(outputs)
         unnormal_probabilities = np.exp(squashed_result)
@@ -42,9 +45,6 @@ class LinearClassifier():
                 .format(unnormal_probabilities))
         probabilities = unnormal_probabilities / sum(unnormal_probabilities)
         return probabilities
-
-    def batch_eval(self, inputs, overwrite_weights=None):
-        return [self.eval(i, overwrite_weights=overwrite_weights) for i in inputs]
 
     def loss(self, output, one_hot_target, loss_func=mse_loss, regularization=None, regularization_coef=0.1):
         loss = loss_func(output, one_hot_target)
