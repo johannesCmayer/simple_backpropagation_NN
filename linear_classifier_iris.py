@@ -8,9 +8,10 @@ Original file is located at
 """
 
 import numpy as np
-from sklearn.datasets import load_iris, make_blobs
+from sklearn.datasets import load_iris, make_blobs, load_digits
 import linear_classifier as lin_clf
 import matplotlib.pyplot as plt
+
 
 def shuffle(x, y):
     idx = np.random.permutation(x.shape[0])
@@ -27,7 +28,8 @@ def encode_int_onehot(int_to_encode, num_classes):
 
 def get_data(id):
     data_get_func = {'iris': lambda: load_iris(return_X_y=True),
-                     'blob': lambda: make_blobs(100, 2, centers=5)}
+                     'blobs': lambda: make_blobs(100, 2, centers=4),
+                     'digids': lambda: load_digits(return_X_y=True)}
     x_data, y_data = data_get_func.get(id)()
     x_data, y_data = shuffle(x_data, y_data)
 
@@ -38,19 +40,12 @@ def get_data(id):
     return x_data_normalized, y_one_hot
 
 
-def run():
-    x_data_normalized, y_one_hot = get_data('blob')
+def plot_results(lc, x_data_normalized, y_one_hot):
     y_int = np.argmax(y_one_hot, axis=-1)
-
-    lc = lin_clf.LinearClassifier(x_data_normalized[0].size, y_one_hot[0].size)
-    lc.train(x_data_normalized, y_one_hot, verbose=True, batch_size=None, epochs=1000, learning_rate=0.01, loss=lin_clf.mse_loss)
-
-
-
     plt.scatter([e[0] for e in x_data_normalized], [e[1] for e in x_data_normalized], c=y_int)
 
-    for i in range(len(lc.weights)):
-        plt.plot([-1,1], [-np.sum(lc.weights[i])*0.5, np.sum(lc.weights[i])])
+    # for i in range(len(lc.weights)):
+    #     plt.plot([-1, 1], [-np.sum(lc.weights[i]) * 0.5, np.sum(lc.weights[i])])
 
     grid_size = 1
     grid = np.meshgrid(np.linspace(-grid_size, grid_size, 100), np.linspace(-grid_size, grid_size, 100))
@@ -62,6 +57,20 @@ def run():
 
     plt.grid()
     plt.show()
+
+
+def run():
+    x_data_normalized, y_one_hot = get_data('blobs')
+
+    lc = lin_clf.LinearClassifier(x_data_normalized[0].size, y_one_hot[0].size)
+    lc.train(x_data_normalized, y_one_hot, verbose=True, batch_size=None, epochs=1, learning_rate=0.01,
+             loss=lin_clf.mse_loss)
+
+    # lc.biasses = np.array([1,-0.5,-0.2,0.4])
+    # print(lc.weights.shape)
+    # lc.weights = np.array([[-1,-1],[2,-1],[1,1],[2,0]])
+
+    plot_results(lc, x_data_normalized, y_one_hot)
 
 
 if __name__ == '__main__':

@@ -23,19 +23,25 @@ def l2_norm(x):
     return np.sqrt(np.sum(np.square(x)))
 
 
-class LinearClassifier():
-    def __init__(self, input_size, output_size):
+class FullyConnectedNL():
+    def __init__(self, input_size, output_size, non_linearity_func=None, loss_func=mse_loss, regularisation_func=None, regularization_coef=0.01):
         self.weights = np.random.rand(output_size, input_size)
         self.biasses = np.random.uniform(-10,10,output_size)
 
-    def eval(self, inputs, overwrite_weights=None):
-        active_weights = self.weights
-        if overwrite_weights is not None:
-            active_weights = overwrite_weights
-        return np.matmul(active_weights, inputs) + self.biasses
+        self.non_linearity_func = non_linearity_func
+        self.loss_func = loss_func
+        self.regularisation_func = regularisation_func
+        self.regularization_coef = regularization_coef
 
-    def batch_eval(self, inputs, overwrite_weights=None):
-        return [self.eval(i, overwrite_weights=overwrite_weights) for i in inputs]
+    def eval(self, inputs):
+        active_weights = self.weights
+        result = np.matmul(active_weights, inputs) + self.biasses
+        if self.non_linearity_func:
+            self.non_linearity_func(result)
+        return result
+
+    def batch_eval(self, inputs):
+        return [self.eval(i) for i in inputs]
 
     def outputs_to_probabilities(self, outputs):
         squashed_result = outputs / np.amax(outputs)
@@ -47,45 +53,17 @@ class LinearClassifier():
         probabilities = unnormal_probabilities / sum(unnormal_probabilities)
         return probabilities
 
-    def loss(self, output, one_hot_target, loss_func=mse_loss, regularization=None, regularization_coef=0.1):
-        loss = loss_func(output, one_hot_target)
-        if regularization:
-            loss += regularization(self.weights) / regularization_coef
+    def loss(self, output, one_hot_target):
+        loss = self.loss_func(output, one_hot_target)
+        if self.regularization:
+            loss += self.regularization(self.weights) / self.regularization_coef
         return loss
 
-    def loss_vrt(self, outputs, one_hot_targets, loss_func=mse_loss):
+    def loss_vrt(self, outputs, one_hot_targets):
         cost = 0
         for i, t in zip(outputs, one_hot_targets):
-            cost += self.loss(i, t, loss_func=loss_func)
+            cost += self.loss_func(i, t)
         return cost / len(outputs)
-
-    def gradient_vrt_DEPRECATED(self, inputs, one_hot_targets, dx=0.0001, batch_size=None):
-        data = zip(inputs, one_hot_targets)
-        data_length = batch_size if batch_size else len(inputs)
-        if batch_size:
-            data = random.sample(list(data), batch_size)
-        weight_mat_shape = self.weights.shape
-        weight_mat_size = np.size(self.weights)
-        total_gradient = np.zeros(weight_mat_shape)
-        cnt = 0
-        for sample_input, target in data:
-            sample_gradient = []
-            print('{}/{} - '.format(cnt, data_length), end='\r')
-            cnt += 1
-            for i in range(weight_mat_size):
-                self.weights = self.weights.reshape(-1)
-                self.weights[i] += dx
-                self.weights = self.weights.reshape(weight_mat_shape)
-                nudged_out = self.eval(sample_input)
-                self.weights = self.weights.reshape(-1)
-                self.weights[i] -= dx
-                self.weights = self.weights.reshape(weight_mat_shape)
-
-                out = self.eval(sample_input)
-
-            total_gradient += np.reshape(sample_gradient, weight_mat_shape)
-        total_gradient /= data_length
-        return total_gradient
 
     def _nugde_at_flattend_index(self, arr, idx, dx):
         weight_mat_shape = arr.shape
@@ -99,7 +77,7 @@ class LinearClassifier():
         self._nugde_at_flattend_index(arr, idx, -dx)
         return nudged_out
 
-    def gradient_vrt(self, grad_type, inputs, one_hot_targets, dx=0.01, batch_size=None, loss=mse_loss):
+    def gradient_vrt(self, grad_type, inputs, one_hot_targets, dx=0.01, batch_size=None):
         gradient_types = {'weights': self.weights,
                           'biasses': self.biasses}
         arr_to_calculate_grad = gradient_types.get(grad_type)
@@ -112,9 +90,7 @@ class LinearClassifier():
         for i in range(np.size(arr_to_calculate_grad)):
             nudged_out = self._eval_flattedend_nudged(arr_to_calculate_grad, inputs, i, dx)
             out = self.batch_eval(inputs)
-            gradient.append(-1 * (
-                        self.loss_vrt(nudged_out, one_hot_targets, loss_func=loss) - self.loss_vrt(out, one_hot_targets,
-                                                                                                   loss_func=loss)) / dx)
+            gradient.append(-1 * (self.loss_vrt(nudged_out, one_hot_targets) - self.loss_vrt(out, one_hot_targets)) / dx)
         return np.reshape(gradient, weight_mat_shape)
 
     def eval_performance(self, inputs, one_hot_targets):
@@ -123,8 +99,7 @@ class LinearClassifier():
             val_res.append(np.argmax(self.eval(x)) == np.argmax(y))
         return int(sum(val_res) / len(val_res) * 100)
 
-    def train(self, inputs, one_hot_targets, epochs=1, learning_rate=0.01, verbose=False, batch_size=None,
-              loss=mse_loss):
+    def train(self, inputs, one_hot_targets, epochs=1, learning_rate=0.01, verbose=False, batch_size=None):
         start_time = time.time()
         prev_loss = None
         print('{}% Classified correctly bevore training'.format(self.eval_performance(inputs, one_hot_targets)))
@@ -132,8 +107,8 @@ class LinearClassifier():
         print('loss at begining:', current_loss)
         try:
             for ep in range(epochs):
-                weight_gradient = self.gradient_vrt('weights', inputs, one_hot_targets, batch_size=batch_size, loss=loss)
-                biasses_gradient = self.gradient_vrt('biasses', inputs, one_hot_targets, batch_size=batch_size, loss=loss)
+                weight_gradient = self.gradient_vrt('weights', inputs, one_hot_targets, batch_size=batch_size)
+                biasses_gradient = self.gradient_vrt('biasses', inputs, one_hot_targets, batch_size=batch_size)
                 self.weights = self.weights + (weight_gradient * learning_rate)
                 self.biasses = self.biasses + (biasses_gradient * learning_rate)
                 print('\rBatch {}/{}'.format(ep, epochs), end='')
@@ -156,3 +131,22 @@ class LinearClassifier():
             print('Terminated Early')
         print('\n' + '{}% Classified correctly after training'.format(self.eval_performance(inputs, one_hot_targets)))
         print('Learned for {}s'.format(time.time() - start_time))
+
+
+class Model:
+    def __init__(self):
+        self.layers = []
+
+    def add_layer(self, layer):
+        self.layers.append(layer)
+
+    def eval(self):
+        for l in self.layers:
+            l.eval
+
+    def backpropagate(self):
+        gradient = []
+        return gradient
+
+    def train(self):
+        pass
