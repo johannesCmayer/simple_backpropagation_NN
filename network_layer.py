@@ -172,3 +172,7 @@ class Model:
 
     def train(self):
         pass
+
+    def validate_inputs(self, inputs):
+        if np.any(inputs > 1):
+            print('Warning: Inputs to model are not normalized. Biggest input is {}'.format(np.max(inputs)))
