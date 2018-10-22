@@ -23,10 +23,22 @@ def l2_norm(x):
     return np.sqrt(np.sum(np.square(x)))
 
 
+def glorot_draw(*dn):
+    dn = dn[0]
+    dn_sum = dn
+    if not isinstance(dn, int):
+        dn_sum = sum(dn)
+    if not isinstance(dn_sum, int):
+        raise Exception('Dimentions need to be Integer Values.')
+    limit = np.sqrt(6. / dn_sum)
+    return np.random.uniform(-limit, limit, dn)
+
+
 class FullyConnectedNL():
-    def __init__(self, input_size, output_size, non_linearity_func=None, loss_func=mse_loss, regularisation_func=None, regularization_coef=0.01):
-        self.weights = np.random.rand(output_size, input_size)
-        self.biasses = np.random.uniform(-10,10,output_size)
+    def __init__(self, input_size, output_size, non_linearity_func=None, loss_func=mse_loss, regularisation_func=None,
+                 regularization_coef=0.01, weight_init_func=glorot_draw, bias_init_func=glorot_draw):
+        self.weights = weight_init_func((output_size, input_size))
+        self.biasses = bias_init_func(output_size)
 
         self.non_linearity_func = non_linearity_func
         self.loss_func = loss_func
